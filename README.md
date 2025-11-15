@@ -16,12 +16,12 @@
 python -m pip install --user -r "d:\基因组所工作\model-and-script\requirements.txt"
 ```
 
-主要行为更新（你当前的需求）
+主要行为更新
 
 - 默认输出目录已更改：计数脚本默认输出到 `count-result`，直径脚本默认输出到 `diameter-result`。你也可以用 `--out` 指定其他目录。
 - 每次运行会为输出文件自动生成按序号编号的文件名，避免后一次运行覆盖前一次结果。如：
-	- `count-result/counts_per_image_001.csv` 和 `count-result/counts_total_001.csv`（下一次运行会生成 `_002`）
-	- `diameter-result/diameters_001.csv`（数值字段 `diameter_pixels` 和 `real_diameter` 在 CSV 中保留两位小数，如 `12.34`）
+  - `count-result/counts_per_image_001.csv` 和 `count-result/counts_total_001.csv`（下一次运行会生成 `_002`）
+  - `diameter-result/diameters_001.csv`（数值字段 `diameter_pixels` 和 `real_diameter` 在 CSV 中保留两位小数，如 `12.34`）
 
 使用示例（Windows cmd）
 
@@ -40,22 +40,22 @@ python "d:\基因组所工作\model-and-script\count_yolohbb.py" "d:\path\to\lab
 计算直径（例如：100 像素 = 10 微米，输出到默认 `diameter-result`）：
 
 ```
-python "d:\基因组所工作\model-and-script\compute_diameter.py" "d:\path\to\labels_folder" --scale-pixels 100 --scale-real 10 --unit um
+python "d:\基因组所工作\model-and-script\compute_diameter.py" "d:\path\to\labels_folder" --scale-pixels 100 --scale-real 10 --50um
 ```
 
 或指定输出目录：
 
 ```
-python "d:\genome work\model-and-script\compute_diameter.py" "d:\path\to\labels_folder" --scale-pixels 100 --scale-real 10 --unit um --out "d:\my_results\diameter-result"
+python "d:\genome work\model-and-script\compute_diameter.py" "d:\path\to\labels_folder" --scale-pixels 100 --scale-real 10 --50um --out "d:\my_results\diameter-result"
 ```
 
 标签格式与实现细节（重要说明）
 
 - 支持的行格式：`class x y w h`（或带 angle）与 `class x1 y1 x2 y2 x3 y3 x4 y4`（4 点多边形）。
 - 对于 bbox（w,h）格式：
-	- 若 w,h ≤ 1 且存在同名图像文件（同目录或父目录，支持 .jpg/.jpeg/.png/.tif/.tiff/.bmp），脚本会用图片尺寸把归一化坐标换算为像素；
-	- 若 w 或 h > 1，则认为这些为像素值并直接使用；
-	- 若坐标为归一化但未找到图片，脚本会跳过该条并在 stderr 打印警告（因为无法恢复像素）。
+  - 若 w,h ≤ 1 且存在同名图像文件（同目录或父目录，支持 .jpg/.jpeg/.png/.tif/.tiff/.bmp），脚本会用图片尺寸把归一化坐标换算为像素；
+  - 若 w 或 h > 1，则认为这些为像素值并直接使用；
+  - 若坐标为归一化但未找到图片，脚本会跳过该条并在 stderr 打印警告（因为无法恢复像素）。
 - 对于 8 字段（4 个顶点）格式：若顶点坐标是归一化且找到图片，会把点转换为像素后取顶点间最大欧氏距离作为对象的直径估计。
 
 输出编号规则
@@ -71,10 +71,3 @@ python "d:\genome work\model-and-script\compute_diameter.py" "d:\path\to\labels_
 ```
 for %f in (d:\data\labels\*.txt) do python "d:\基因组所工作\model-and-script\compute_diameter.py" "%f" --scale-pixels 100 --scale-real 10 --unit um
 ```
-
-如果你希望，我可以：
-
-- 基于一个你提供的示例标签（和图片）做一次端到端运行并把结果摘要贴回；
-- 或将文件编号策略改为基于时间戳或锁文件以提升并发安全性。
-
-如果需要我现在做示例运行或并发命名改进，请告诉我你的优先项并提供（可选）示例文件。
