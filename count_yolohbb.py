@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import re
 import sys
 from collections import defaultdict
 from pathlib import Path
@@ -62,9 +63,30 @@ def process_files(files: Iterable[Path]) -> Tuple[dict, dict]:
     return per_file, dict(total)
 
 
-def save_results(per_file: dict, total: dict, out_dir: Path):
+def _next_index_for_prefix(out_dir: Path, prefix: str) -> int:
     out_dir.mkdir(parents=True, exist_ok=True)
-    per_file_csv = out_dir / "counts_per_image.csv"
+    max_idx = 0
+    pattern = re.compile(rf"^{re.escape(prefix)}_(\d+)\.csv$")
+    for p in out_dir.iterdir():
+        if not p.is_file():
+            continue
+        m = pattern.match(p.name)
+        if m:
+            try:
+                idx = int(m.group(1))
+                if idx > max_idx:
+                    max_idx = idx
+            except Exception:
+                continue
+    return max_idx + 1
+
+
+def save_results(per_file: dict, total: dict, out_dir: Path):
+    # out_dir is the base directory for count results
+    out_dir = out_dir or Path("count-result")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    idx = _next_index_for_prefix(out_dir, "counts_per_image")
+    per_file_csv = out_dir / f"counts_per_image_{idx:03d}.csv"
     with per_file_csv.open("w", newline="", encoding="utf-8") as fh:
         writer = csv.writer(fh)
         writer.writerow(["image", "class_id", "count"])
@@ -72,7 +94,7 @@ def save_results(per_file: dict, total: dict, out_dir: Path):
             for cls, c in sorted(counts.items()):
                 writer.writerow([image, cls, c])
 
-    total_csv = out_dir / "counts_total.csv"
+    total_csv = out_dir / f"counts_total_{idx:03d}.csv"
     with total_csv.open("w", newline="", encoding="utf-8") as fh:
         writer = csv.writer(fh)
         writer.writerow(["class_id", "total_count"])
@@ -85,7 +107,7 @@ def save_results(per_file: dict, total: dict, out_dir: Path):
 def main():
     p = argparse.ArgumentParser(description="统计 YOLOhbb 标注类别数量")
     p.add_argument("input", type=Path, help="标签文件或包含标签文件的文件夹")
-    p.add_argument("--out", type=Path, default=Path("result"), help="输出目录, 默认 result")
+    p.add_argument("--out", type=Path, default=Path("count-result"), help="输出目录, 默认 count-result")
     args = p.parse_args()
 
     files = list(find_label_files(args.input))

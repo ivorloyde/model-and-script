@@ -20,6 +20,7 @@ from __future__ import annotations
 import argparse
 import csv
 import math
+import re
 import sys
 from pathlib import Path
 from typing import Iterable, List, Optional, Tuple
@@ -143,13 +144,36 @@ def process_label_file(label_path: Path, scale_pixels: float, scale_real: float,
 
 
 def save_csv(rows: List[dict], out_dir: Path):
+    out_dir = out_dir or Path("diameter-result")
     out_dir.mkdir(parents=True, exist_ok=True)
-    out = out_dir / "diameters.csv"
+
+    # determine next index based on existing files
+    def _next_index_for_prefix(out_dir: Path, prefix: str) -> int:
+        max_idx = 0
+        pattern = re.compile(rf"^{re.escape(prefix)}_(\d+)\.csv$")
+        for p in out_dir.iterdir():
+            if not p.is_file():
+                continue
+            m = pattern.match(p.name)
+            if m:
+                try:
+                    idx = int(m.group(1))
+                    if idx > max_idx:
+                        max_idx = idx
+                except Exception:
+                    continue
+        return max_idx + 1
+
+    idx = _next_index_for_prefix(out_dir, "diameters")
+    out = out_dir / f"diameters_{idx:03d}.csv"
     with out.open("w", newline="", encoding="utf-8") as fh:
         writer = csv.writer(fh)
         writer.writerow(["image", "label_file", "class_id", "diameter_pixels", "real_diameter", "unit"])
         for r in rows:
-            writer.writerow([r["image"], r["label_file"], r["class_id"], r["diameter_pixels"], r["real_diameter"], r["unit"]])
+            # round numeric outputs to 2 decimal places for better UX
+            dp = f"{r['diameter_pixels']:.2f}" if r.get('diameter_pixels') is not None else ""
+            rd = f"{r['real_diameter']:.2f}" if r.get('real_diameter') is not None else ""
+            writer.writerow([r["image"], r["label_file"], r["class_id"], dp, rd, r["unit"]])
     print(f"wrote: {out}")
 
 
@@ -159,7 +183,7 @@ def main():
     p.add_argument("--scale-pixels", type=float, required=True, help="比例尺：代表的像素长度（例如显微镜标尺对应的像素数）")
     p.add_argument("--scale-real", type=float, required=True, help="比例尺对应的真实长度（单位在 --unit 中指定）")
     p.add_argument("--unit", type=str, default="um", help="真实长度单位，默认 'um'（微米）")
-    p.add_argument("--out", type=Path, default=Path("result"), help="输出目录, 默认 result")
+    p.add_argument("--out", type=Path, default=Path("diameter-result"), help="输出目录, 默认 diameter-result")
     args = p.parse_args()
 
     files = list(find_label_files(args.input))

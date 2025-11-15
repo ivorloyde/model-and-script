@@ -2,36 +2,79 @@
 
 包含两个脚本：
 
-- `count_yolohbb.py`：统计标签中不同类别的数量，输出 `result/counts_per_image.csv` 和 `result/counts_total.csv`。
-- `compute_diameter.py`：根据输入的像素比例尺（像素对应的真实长度）计算每个标注对象的真实直径，输出 `result/diameters.csv`。
+- `count_yolohbb.py`：统计标签中不同类别的数量，按运行顺序把结果写入 `count-result` 目录，避免覆盖历史结果。
+- `compute_diameter.py`：根据输入的像素比例尺（像素对应的真实长度）计算每个标注对象的真实直径，按运行顺序把结果写入 `diameter-result` 目录，且数值在 CSV 中保留两位小数。
 
 依赖
+
 - Python 3.7+
 - Pillow（用于读取图像尺寸）
 
-安装示例（Windows cmd）：
+安装（Windows cmd）：
 
 ```
-python -m pip install --user Pillow
+python -m pip install --user -r "d:\基因组所工作\model-and-script\requirements.txt"
 ```
 
-使用示例：
+主要行为更新（你当前的需求）
 
-统计标签数量：
+- 默认输出目录已更改：计数脚本默认输出到 `count-result`，直径脚本默认输出到 `diameter-result`。你也可以用 `--out` 指定其他目录。
+- 每次运行会为输出文件自动生成按序号编号的文件名，避免后一次运行覆盖前一次结果。如：
+	- `count-result/counts_per_image_001.csv` 和 `count-result/counts_total_001.csv`（下一次运行会生成 `_002`）
+	- `diameter-result/diameters_001.csv`（数值字段 `diameter_pixels` 和 `real_diameter` 在 CSV 中保留两位小数，如 `12.34`）
+
+使用示例（Windows cmd）
+
+统计标签数量（处理整个标签文件夹，输出到默认 `count-result`）：
 
 ```
-python count_yolohbb.py path/to/labels_folder --out result
+python "d:\基因组所工作\model-and-script\count_yolohbb.py" "d:\path\to\labels_folder"
 ```
 
-计算直径（例如：100 像素 对应 10 微米）：
+或指定输出目录：
 
 ```
-python compute_diameter.py path/to/labels_folder --scale-pixels 100 --scale-real 10 --unit um --out result
+python "d:\基因组所工作\model-and-script\count_yolohbb.py" "d:\path\to\labels_folder" --out "d:\my_results\count-result"
 ```
 
-说明与假设：
-- 脚本支持 `class x y w h`、`class x y w h angle` 和 `class x1 y1 x2 y2 x3 y3 x4 y4` 格式的行。
-- 如果坐标是归一化（0..1），脚本需要与标签同名的图像文件来恢复像素尺寸（查找同目录或父目录；支持 jpg/png/tif 等）。
-- 如果坐标已经是像素值（数值大于 1），脚本将直接使用。
+计算直径（例如：100 像素 = 10 微米，输出到默认 `diameter-result`）：
 
-如果你有特殊的 YOLOhbb 格式（例如其它字段顺序），告诉我样例行我可以直接调整解析逻辑。
+```
+python "d:\基因组所工作\model-and-script\compute_diameter.py" "d:\path\to\labels_folder" --scale-pixels 100 --scale-real 10 --unit um
+```
+
+或指定输出目录：
+
+```
+python "d:\genome work\model-and-script\compute_diameter.py" "d:\path\to\labels_folder" --scale-pixels 100 --scale-real 10 --unit um --out "d:\my_results\diameter-result"
+```
+
+标签格式与实现细节（重要说明）
+
+- 支持的行格式：`class x y w h`（或带 angle）与 `class x1 y1 x2 y2 x3 y3 x4 y4`（4 点多边形）。
+- 对于 bbox（w,h）格式：
+	- 若 w,h ≤ 1 且存在同名图像文件（同目录或父目录，支持 .jpg/.jpeg/.png/.tif/.tiff/.bmp），脚本会用图片尺寸把归一化坐标换算为像素；
+	- 若 w 或 h > 1，则认为这些为像素值并直接使用；
+	- 若坐标为归一化但未找到图片，脚本会跳过该条并在 stderr 打印警告（因为无法恢复像素）。
+- 对于 8 字段（4 个顶点）格式：若顶点坐标是归一化且找到图片，会把点转换为像素后取顶点间最大欧氏距离作为对象的直径估计。
+
+输出编号规则
+
+- 脚本会在目标输出目录中搜索已有的符合前缀的 CSV 文件（例如 `counts_per_image_###.csv` 或 `diameters_###.csv`），解析出最大编号并使用下一个编号作为新运行的索引（格式为三位数，例如 001、002）。
+- 对于并发写入场景（多个脚本同时运行）该简单方法可能不是完全原子化；如果你需要并发安全的方案，我可以改用锁文件或包含时间戳的命名策略。
+
+路径与运行建议
+
+- 路径中含空格请使用双引号（"）。建议使用绝对路径以避免当前工作目录带来的歧义。
+- 如果需要批量对不同参数（例如不同 scale）分别运行单个标签文件，可在 cmd 中使用 `for` 循环：
+
+```
+for %f in (d:\data\labels\*.txt) do python "d:\基因组所工作\model-and-script\compute_diameter.py" "%f" --scale-pixels 100 --scale-real 10 --unit um
+```
+
+如果你希望，我可以：
+
+- 基于一个你提供的示例标签（和图片）做一次端到端运行并把结果摘要贴回；
+- 或将文件编号策略改为基于时间戳或锁文件以提升并发安全性。
+
+如果需要我现在做示例运行或并发命名改进，请告诉我你的优先项并提供（可选）示例文件。
