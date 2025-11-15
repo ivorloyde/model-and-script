@@ -1,0 +1,2 @@
+# Requirements for YOLO label tools
+Pillow>=8.0.0

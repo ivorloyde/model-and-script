@@ -1,0 +1,10 @@
+type: yolo12
+name: yolo12m-r20250514
+provider: Ultralytics
+display_name: YOLO12m18
+model_path: best.onnx
+iou_threshold: 0.45
+conf_threshold: 0.45
+classes:
+  - fertile
+  - sterlity
