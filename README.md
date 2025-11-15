@@ -5,6 +5,10 @@
 - `count_yolohbb.py`：统计标签中不同类别的数量，按运行顺序把结果写入 `count-result` 目录，避免覆盖历史结果。
 - `compute_diameter.py`：根据输入的像素比例尺（像素对应的真实长度）计算每个标注对象的真实直径，按运行顺序把结果写入 `diameter-result` 目录，且数值在 CSV 中保留两位小数。
 
+输入格式
+
+* 将X-Anylabeling输出的txt标注与对应图片存放在同一个文件夹中作为输入目录即可。建议使用绝对目录。
+
 依赖
 
 - Python 3.7+
@@ -13,7 +17,7 @@
 安装（Windows cmd）：
 
 ```
-python -m pip install --user -r "d:\基因组所工作\model-and-script\requirements.txt"
+python -m pip install --user -r requirements.txt
 ```
 
 主要行为更新
