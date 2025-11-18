@@ -1,14 +1,9 @@
 #!/usr/bin/env python3
 """
-统计 YOLOhbb 标注中不同类别的数量。
+统计 YOLOhbb 标注中不同类别的数量，并在输出中包含类名（来自 classes.txt）。
 
-支持输入单个标签文件或包含标签文件的文件夹（递归）。
-支持常见 YOLO / YOLOhbb 行格式：
- - class x y w h
- - class x y w h angle
- - class x1 y1 x2 y2 x3 y3 x4 y4
-
-输出：将结果保存到 `result/counts.csv`，包含每张图的各类计数以及总计。
+使用 `--classes` 指定 `classes.txt`（每行一个类名，行号为 class id）。
+如果未指定，脚本会尝试在输入目录或当前工作目录查找 `classes.txt`。
 """
 from __future__ import annotations
 
@@ -18,7 +13,7 @@ import re
 import sys
 from collections import defaultdict
 from pathlib import Path
-from typing import Iterable, Tuple
+from typing import Iterable, Tuple, Dict, Optional
 
 
 def find_label_files(path: Path) -> Iterable[Path]:
@@ -38,8 +33,26 @@ def parse_label_line(line: str) -> Tuple[int, list]:
     return cls, coords
 
 
-def process_files(files: Iterable[Path]) -> Tuple[dict, dict]:
-    # per-file counts and total counts
+def load_classes(classes_path: Optional[Path]) -> Dict[int, str]:
+    names: Dict[int, str] = {}
+    if not classes_path:
+        return names
+    try:
+        text = classes_path.read_text(encoding="utf-8")
+    except Exception:
+        try:
+            text = classes_path.read_text(encoding="latin-1")
+        except Exception:
+            return names
+    for i, line in enumerate(text.splitlines()):
+        s = line.strip()
+        if not s:
+            continue
+        names[i] = s
+    return names
+
+
+def process_files(files: Iterable[Path], classes_map: Dict[int, str]) -> Tuple[dict, dict]:
     per_file = {}
     total = defaultdict(int)
     for f in files:
@@ -81,25 +94,26 @@ def _next_index_for_prefix(out_dir: Path, prefix: str) -> int:
     return max_idx + 1
 
 
-def save_results(per_file: dict, total: dict, out_dir: Path):
-    # out_dir is the base directory for count results
+def save_results(per_file: dict, total: dict, out_dir: Path, classes_map: Dict[int, str]):
     out_dir = out_dir or Path("count-result")
     out_dir.mkdir(parents=True, exist_ok=True)
     idx = _next_index_for_prefix(out_dir, "counts_per_image")
     per_file_csv = out_dir / f"counts_per_image_{idx:03d}.csv"
     with per_file_csv.open("w", newline="", encoding="utf-8") as fh:
         writer = csv.writer(fh)
-        writer.writerow(["image", "class_id", "count"])
+        writer.writerow(["image", "class_id", "class_name", "count"])
         for image, counts in sorted(per_file.items()):
             for cls, c in sorted(counts.items()):
-                writer.writerow([image, cls, c])
+                name = classes_map.get(cls, "")
+                writer.writerow([image, cls, name, c])
 
     total_csv = out_dir / f"counts_total_{idx:03d}.csv"
     with total_csv.open("w", newline="", encoding="utf-8") as fh:
         writer = csv.writer(fh)
-        writer.writerow(["class_id", "total_count"])
+        writer.writerow(["class_id", "class_name", "total_count"])
         for cls, c in sorted(total.items()):
-            writer.writerow([cls, c])
+            name = classes_map.get(cls, "")
+            writer.writerow([cls, name, c])
 
     print(f"wrote: {per_file_csv}\nwrote: {total_csv}")
 
@@ -108,14 +122,32 @@ def main():
     p = argparse.ArgumentParser(description="统计 YOLOhbb 标注类别数量")
     p.add_argument("input", type=Path, help="标签文件或包含标签文件的文件夹")
     p.add_argument("--out", type=Path, default=Path("count-result"), help="输出目录, 默认 count-result")
+    p.add_argument("--classes", type=Path, default=None, help="可选：classes.txt 文件路径（每行一个类别名，行号即 class id）")
     args = p.parse_args()
+
+    # try to locate classes.txt if not provided
+    classes_path = args.classes
+    if classes_path is None:
+        # try input folder/parent and cwd
+        guessed = args.input
+        if guessed.is_file():
+            guessed = guessed.parent
+        cand = guessed / "classes.txt"
+        if cand.exists():
+            classes_path = cand
+        else:
+            cand2 = Path.cwd() / "classes.txt"
+            if cand2.exists():
+                classes_path = cand2
+
+    classes_map = load_classes(classes_path)
 
     files = list(find_label_files(args.input))
     if not files:
         print("没有找到任何 .txt 标签文件", file=sys.stderr)
         raise SystemExit(2)
-    per_file, total = process_files(files)
-    save_results(per_file, total, args.out)
+    per_file, total = process_files(files, classes_map)
+    save_results(per_file, total, args.out, classes_map)
 
 
 if __name__ == "__main__":

@@ -23,7 +23,7 @@ import math
 import re
 import sys
 from pathlib import Path
-from typing import Iterable, List, Optional, Tuple
+from typing import Iterable, List, Optional, Tuple, Dict
 
 from PIL import Image
 
@@ -37,6 +37,25 @@ def find_label_files(path: Path) -> Iterable[Path]:
         return
     for p in path.rglob("*.txt"):
         yield p
+
+
+def load_classes(classes_path: Optional[Path]) -> Dict[int, str]:
+    names: Dict[int, str] = {}
+    if not classes_path:
+        return names
+    try:
+        text = classes_path.read_text(encoding="utf-8")
+    except Exception:
+        try:
+            text = classes_path.read_text(encoding="latin-1")
+        except Exception:
+            return names
+    for i, line in enumerate(text.splitlines()):
+        s = line.strip()
+        if not s:
+            continue
+        names[i] = s
+    return names
 
 
 def find_image_for_label(label_path: Path) -> Optional[Path]:
@@ -72,7 +91,7 @@ def max_point_distance(pts: List[Tuple[float, float]]) -> float:
     return maxd
 
 
-def process_label_file(label_path: Path, scale_pixels: float, scale_real: float, unit: str) -> List[dict]:
+def process_label_file(label_path: Path, scale_pixels: float, scale_real: float, unit: str, classes_map: Dict[int, str]) -> List[dict]:
     out = []
     img_path = find_image_for_label(label_path)
     if img_path:
@@ -135,6 +154,7 @@ def process_label_file(label_path: Path, scale_pixels: float, scale_real: float,
             "image": img_path.name if img_path else "",
             "label_file": label_path.name,
             "class_id": cls,
+            "class_name": classes_map.get(cls, ""),
             "diameter_pixels": float(diameter_px),
             "real_diameter": float(real_diameter),
             "unit": unit,
@@ -168,12 +188,12 @@ def save_csv(rows: List[dict], out_dir: Path):
     out = out_dir / f"diameters_{idx:03d}.csv"
     with out.open("w", newline="", encoding="utf-8") as fh:
         writer = csv.writer(fh)
-        writer.writerow(["image", "label_file", "class_id", "diameter_pixels", "real_diameter", "unit"])
+        writer.writerow(["image", "label_file", "class_id", "class_name", "diameter_pixels", "real_diameter", "unit"])
         for r in rows:
             # round numeric outputs to 2 decimal places for better UX
             dp = f"{r['diameter_pixels']:.2f}" if r.get('diameter_pixels') is not None else ""
             rd = f"{r['real_diameter']:.2f}" if r.get('real_diameter') is not None else ""
-            writer.writerow([r["image"], r["label_file"], r["class_id"], dp, rd, r["unit"]])
+            writer.writerow([r["image"], r["label_file"], r.get("class_id", ""), r.get("class_name", ""), dp, rd, r["unit"]])
     print(f"wrote: {out}")
 
 
@@ -184,6 +204,7 @@ def main():
     p.add_argument("--scale-real", type=float, required=True, help="比例尺对应的真实长度（单位在 --unit 中指定）")
     p.add_argument("--unit", type=str, default="um", help="真实长度单位，默认 'um'（微米）")
     p.add_argument("--out", type=Path, default=Path("diameter-result"), help="输出目录, 默认 diameter-result")
+    p.add_argument("--classes", type=Path, default=None, help="可选：classes.txt 文件路径（每行一个类别名，行号即 class id）")
     args = p.parse_args()
 
     files = list(find_label_files(args.input))
@@ -191,10 +212,26 @@ def main():
         print("没有找到任何 .txt 标签文件", file=sys.stderr)
         raise SystemExit(2)
 
+    # try to locate classes.txt if not provided
+    classes_path = args.classes
+    if classes_path is None:
+        guessed = args.input
+        if guessed.is_file():
+            guessed = guessed.parent
+        cand = guessed / "classes.txt"
+        if cand.exists():
+            classes_path = cand
+        else:
+            cand2 = Path.cwd() / "classes.txt"
+            if cand2.exists():
+                classes_path = cand2
+
+    classes_map = load_classes(classes_path)
+
     all_rows = []
     for f in files:
         try:
-            rows = process_label_file(f, args.scale_pixels, args.scale_real, args.unit)
+            rows = process_label_file(f, args.scale_pixels, args.scale_real, args.unit, classes_map)
             all_rows.extend(rows)
         except Exception as e:
             print(f"error processing {f}: {e}", file=sys.stderr)

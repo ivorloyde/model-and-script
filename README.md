@@ -44,14 +44,36 @@ python "d:\基因组所工作\model-and-script\count_yolohbb.py" "d:\path\to\lab
 计算直径（例如：100 像素 = 10 微米，输出到默认 `diameter-result`）：
 
 ```
-python "d:\基因组所工作\model-and-script\compute_diameter.py" "d:\path\to\labels_folder" --scale-pixels 100 --scale-real 10 --50um
+python "d:\基因组所工作\model-and-script\compute_diameter.py" "d:\path\to\labels_folder" --scale-pixels 100 --scale-real 50
 ```
 
 或指定输出目录：
 
 ```
-python "d:\genome work\model-and-script\compute_diameter.py" "d:\path\to\labels_folder" --scale-pixels 100 --scale-real 10 --50um --out "d:\my_results\diameter-result"
+python "d:\genome work\model-and-script\compute_diameter.py" "d:\path\to\labels_folder" --scale-pixels 100 --scale-real 50 --out "d:\my_results\diameter-result"
 ```
+
+使用 `classes.txt`（可选）
+
+如果你希望在输出 CSV 中看到可读的类别名称而不是仅仅数字 id，可以提供一个 `classes.txt` 文件（每行一个类别名，行号即 class id，从 0 开始）。
+
+示例 `classes.txt` 内容：
+
+```
+pollen_type_A
+pollen_type_B
+artifact
+```
+
+然后运行脚本时传入 `--classes` 参数，或将 `classes.txt` 放在标签文件夹或当前工作目录，脚本会自动查找：
+
+```
+python "d:\基因组所工作\model-and-script\count_yolohbb.py" "d:\path\to\labels_folder" --classes "d:\path\to\classes.txt"
+
+python "d:\基因组所工作\model-and-script\compute_diameter.py" "d:\path\to\labels_folder" --scale-pixels 100 --scale-real 50 --classes "d:\path\to\classes.txt"
+```
+
+输出 CSV 会包含 `class_name` 列（同时保留 `class_id` 列），可读性更好。
 
 标签格式与实现细节（重要说明）
 
